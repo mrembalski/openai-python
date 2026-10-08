@@ -107,6 +107,7 @@ from ._exceptions import (
 from ._utils._json import openapi_dumps
 from ._utils._logs import get_http_method_for_logging
 from ._legacy_response import LegacyAPIResponse
+from ._connection_reuse import wrap_response_stream
 
 log: logging.Logger = logging.getLogger(__name__)
 log.addFilter(SensitiveHeadersFilter())
@@ -1144,10 +1145,11 @@ class SyncAPIClient(BaseClient[httpx2.Client, Stream[Any]]):
             log.debug("Sending HTTP Request: %s", get_http_method_for_logging(request.method))
 
             response = None
+            stream_response_body = stream or self._should_stream_response_body(request=request)
             try:
                 response = self._send_request(
                     request,
-                    stream=stream or self._should_stream_response_body(request=request),
+                    stream=stream_response_body,
                     **kwargs,
                 )
             except timeout_exceptions() as err:
@@ -1181,6 +1183,9 @@ class SyncAPIClient(BaseClient[httpx2.Client, Stream[Any]]):
 
                 log.debug("Raising connection error")
                 raise APIConnectionError(request=request) from err
+
+            if stream_response_body:
+                wrap_response_stream(response)
 
             log.debug(
                 "HTTP Response: %s %i",
@@ -1769,10 +1774,11 @@ class AsyncAPIClient(BaseClient[httpx2.AsyncClient, AsyncStream[Any]]):
             log.debug("Sending HTTP Request: %s", get_http_method_for_logging(request.method))
 
             response = None
+            stream_response_body = stream or self._should_stream_response_body(request=request)
             try:
                 response = await self._send_request(
                     request,
-                    stream=stream or self._should_stream_response_body(request=request),
+                    stream=stream_response_body,
                     **kwargs,
                 )
             except timeout_exceptions() as err:
@@ -1806,6 +1812,9 @@ class AsyncAPIClient(BaseClient[httpx2.AsyncClient, AsyncStream[Any]]):
 
                 log.debug("Raising connection error")
                 raise APIConnectionError(request=request) from err
+
+            if stream_response_body:
+                wrap_response_stream(response)
 
             log.debug(
                 "HTTP Response: %s %i",
